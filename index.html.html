@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 实验报告生成助手 v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0e0f11; --surface:#16181c; --surface2:#1c1f24;
+  --border:#2a2d34; --accent:#c8f560; --accent2:#60d5f5;
+  --accent3:#f5a560; --text:#e8eaed; --muted:#6b7280;
+  --danger:#ff6b6b; --success:#4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;padding:2rem 1rem 5rem}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+.container{max-width:860px;margin:0 auto;position:relative;z-index:1}
+
+/* Header */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);border:1px solid rgba(200,245,96,.2);padding:4px 12px;border-radius:2px;margin-bottom:1.25rem}
+.badge::before{content:'';width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+h1{font-family:'Syne',sans-serif;font-size:clamp(1.9rem,5vw,3rem);font-weight:800;line-height:1.1;letter-spacing:-.02em;margin-bottom:.5rem}
+h1 span{color:var(--accent)}
+.subtitle{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:2.5rem}
+
+/* Steps */
+.steps-bar{display:flex;align-items:center;margin-bottom:2rem;overflow-x:auto;padding-bottom:4px}
+.step-item{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.step-dot{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;color:var(--muted);transition:all .3s}
+.step-dot.active{border-color:var(--accent);color:var(--accent);background:rgba(200,245,96,.08)}
+.step-dot.done{border-color:var(--accent);background:var(--accent);color:#0e0f11}
+.step-label{font-size:11px;color:var(--muted);letter-spacing:.06em}
+.step-line{width:32px;height:1px;background:var(--border);margin:0 8px;flex-shrink:0}
+
+/* Form card */
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2rem;margin-bottom:1rem}
+.form-section-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:1.25rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.form-row{margin-bottom:0}
+.form-row.full{grid-column:1/-1}
+label{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem}
+.req{color:var(--accent)}
+.opt{color:var(--muted);font-size:10px;letter-spacing:0;text-transform:none}
+input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:10px 14px;transition:border-color .2s,box-shadow .2s;outline:none;resize:vertical;appearance:none}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(200,245,96,.08)}
+input::placeholder,textarea::placeholder{color:#2e3138}
+textarea{min-height:88px}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;cursor:pointer}
+select option{background:#1c1f24}
+.field-meta{display:flex;justify-content:flex-end;margin-top:4px}
+.char-count{font-size:10px;color:var(--muted)}
+.char-count.warn{color:var(--accent3)}
+
+/* Upload zone */
+.upload-zone{width:100%;background:var(--bg);border:1.5px dashed var(--border);border-radius:3px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(200,245,96,.04)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:22px;margin-bottom:6px}
+.upload-label{font-size:12px;color:var(--muted);line-height:1.6}
+.upload-label strong{color:var(--accent2)}
+.upload-types{font-size:10px;color:#3d4046;margin-top:4px;letter-spacing:.04em}
+
+/* File preview list */
+.file-list{margin-top:.75rem;display:flex;flex-direction:column;gap:6px}
+.file-item{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:8px 12px;font-size:12px}
+.file-icon{font-size:16px;flex-shrink:0}
+.file-name{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-size{color:var(--muted);font-size:11px;flex-shrink:0}
+.file-del{cursor:pointer;color:var(--muted);font-size:14px;flex-shrink:0;transition:color .15s}
+.file-del:hover{color:var(--danger)}
+.file-preview-img{width:100%;max-height:180px;object-fit:contain;border-radius:3px;margin-top:.5rem;border:1px solid var(--border)}
+
+/* Advanced */
+.advanced-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;padding:10px 0;border-top:1px solid var(--border);margin-top:1.5rem;user-select:none;transition:color .2s}
+.advanced-toggle:hover{color:var(--text)}
+.toggle-arrow{transition:transform .25s;font-size:10px}
+.toggle-arrow.open{transform:rotate(90deg)}
+.advanced-fields{display:none;margin-top:1.25rem}
+.advanced-fields.open{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+
+/* Buttons */
+.btn-primary{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:#0e0f11;border:none;border-radius:2px;padding:12px 28px;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .15s;display:flex;align-items:center;gap:8px}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(200,245,96,.2)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-secondary{font-family:'Syne',sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:2px;padding:11px 20px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+.btn-secondary:hover{border-color:var(--text);color:var(--text)}
+.btn-row{display:flex;gap:10px;align-items:center}
+
+/* Loading */
+.loading{display:none;align-items:center;gap:12px;padding:14px 0;font-size:12px;color:var(--muted)}
+.loading.active{display:flex}
+.loading-bar{width:140px;height:2px;background:var(--border);border-radius:99px;overflow:hidden}
+.loading-bar-fill{height:100%;background:var(--accent);border-radius:99px;animation:lanim 1.9s ease-in-out forwards}
+@keyframes lanim{0%{width:0}30%{width:40%}70%{width:75%}100%{width:100%}}
+
+/* Error / Success toast */
+.toast{border-radius:3px;padding:12px 16px;font-size:12px;display:none;margin-top:1rem}
+.toast.show{display:block}
+.toast.error{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.25);color:var(--danger)}
+.toast.success{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:var(--success)}
+
+/* Output */
+#output{opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s}
+#output.visible{opacity:1;transform:translateY(0)}
+.report-meta-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem}
+.report-label{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.report-info{font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+
+/* Section */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:.875rem;overflow:hidden;animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.section:nth-child(2){animation-delay:.05s}.section:nth-child(3){animation-delay:.1s}.section:nth-child(4){animation-delay:.15s}.section:nth-child(5){animation-delay:.2s}.section:nth-child(6){animation-delay:.25s}.section:nth-child(7){animation-delay:.3s}.section:nth-child(8){animation-delay:.35s}
+.section-head{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);cursor:pointer;user-select:none}
+.section-head:hover{background:rgba(255,255,255,.03)}
+.section-num{font-family:'Syne',sans-serif;font-size:10px;font-weight:800;color:var(--accent);min-width:22px;letter-spacing:.05em}
+.section-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;flex:1}
+.section-icon{font-size:15px}
+.collapse-btn{font-size:11px;color:var(--muted);transition:transform .2s}
+.collapse-btn.collapsed{transform:rotate(-90deg)}
+.section-body{padding:20px 22px;font-size:13px;line-height:1.9;color:#c0c5ce}
+.section-body p{margin-bottom:.875rem}
+.section-body p:last-child{margin-bottom:0}
+ol,ul{padding-left:1.4rem;margin-bottom:.875rem}
+li{margin-bottom:.5rem;line-height:1.7}
+li strong{color:var(--text)}
+
+/* Callout boxes */
+.highlight{background:rgba(200,245,96,.07);border-left:2px solid var(--accent);padding:12px 16px;border-radius:0 3px 3px 0;margin:1rem 0;font-size:12px;color:rgba(200,245,96,.85);line-height:1.6}
+.info-box{background:rgba(96,213,245,.06);border-left:2px solid var(--accent2);padding:12px 16px;border-radius:0 3px 3px 0;margin:1rem 0;font-size:12px;color:rgba(96,213,245,.85);line-height:1.6}
+.warn-box{background:rgba(245,165,96,.06);border-left:2px solid var(--accent3);padding:12px 16px;border-radius:0 3px 3px 0;margin:1rem 0;font-size:12px;color:rgba(245,165,96,.85);line-height:1.6}
+
+/* Tags */
+.tag{display:inline-block;font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 8px;border-radius:2px;margin-right:6px;margin-bottom:3px;vertical-align:middle}
+.tag-g{background:rgba(200,245,96,.1);color:var(--accent);border:1px solid rgba(200,245,96,.2)}
+.tag-b{background:rgba(96,213,245,.1);color:var(--accent2);border:1px solid rgba(96,213,245,.2)}
+.tag-o{background:rgba(245,165,96,.1);color:var(--accent3);border:1px solid rgba(245,165,96,.2)}
+
+/* Table */
+.data-table{width:100%;border-collapse:collapse;font-size:12px;margin:.875rem 0}
+.data-table th{background:rgba(255,255,255,.04);text-align:left;padding:8px 12px;font-family:'Syne',sans-serif;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+.data-table td{padding:9px 12px;border-bottom:1px solid rgba(42,45,52,.6);color:#c0c5ce;line-height:1.5}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,.02)}
+
+/* Output actions */
+.output-actions{display:flex;gap:10px;margin-top:1.5rem;flex-wrap:wrap}
+
+/* Shortcut hint */
+.shortcut-hint{font-size:11px;color:var(--muted);margin-bottom:1.5rem}
+.shortcut-hint kbd{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text)}
+
+footer{margin-top:3.5rem;text-align:center;font-size:11px;color:#2e3138;letter-spacing:.05em}
+
+/* Uploaded attachments in report */
+.attachment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:.75rem}
+.att-card{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:10px;font-size:11px}
+.att-card img{width:100%;height:100px;object-fit:contain;border-radius:2px;margin-bottom:6px;background:var(--bg)}
+.att-card .att-name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-card .att-type{color:var(--muted);font-size:10px;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="badge">AI · 实验报告助手 v3</div>
+  <h1>实验报告<br><span>生成助手</span></h1>
+  <p class="subtitle">填写实验信息并上传附件，自动生成包含<br>原理 · 步骤 · 结果 · 分析 · 结论 · 误差 · 反思 共七大模块的完整报告</p>
+</header>
+
+<!-- Steps -->
+<div class="steps-bar">
+  <div class="step-item"><div class="step-dot active" id="sd1">1</div><span class="step-label">填写信息</span></div>
+  <div class="step-line"></div>
+  <div class="step-item"><div class="step-dot" id="sd2">2</div><span class="step-label">生成报告</span></div>
+  <div class="step-line"></div>
+  <div class="step-item"><div class="step-dot" id="sd3">3</div><span class="step-label">查看 & 导出</span></div>
+</div>
+
+<!-- Form -->
+<div class="form-card">
+  <div class="form-section-title">// 基础信息</div>
+  <div class="form-grid">
+
+    <div class="form-row">
+      <label>实验名称 <span class="req">*</span></label>
+      <input type="text" id="expName" maxlength="80" oninput="updateChar(this,'nc')" placeholder="例：探究温度对淀粉酶活性的影响">
+      <div class="field-meta"><span class="char-count" id="nc">0/80</span></div>
+    </div>
+
+    <div class="form-row">
+      <label>实验类型 <span class="req">*</span></label>
+      <select id="expType">
+        <option value="">请选择实验类型</option>
+        <option value="bio">生物学实验</option>
+        <option value="chem">化学实验</option>
+        <option value="phys">物理实验</option>
+        <option value="env">环境科学实验</option>
+        <option value="other">其他类型</option>
+      </select>
+    </div>
+
+    <div class="form-row full">
+      <label>实验目的 <span class="req">*</span></label>
+      <textarea id="expGoal" maxlength="400" oninput="updateChar(this,'gc')" placeholder="例：验证不同温度条件下淀粉酶催化淀粉水解的速率差异，确定最适温度范围。"></textarea>
+      <div class="field-meta"><span class="char-count" id="gc">0/400</span></div>
+    </div>
+
+    <div class="form-row full">
+      <label>实验数据 <span class="req">*</span></label>
+      <textarea id="expData" maxlength="600" oninput="updateChar(this,'dc')" placeholder="例：20°C需18min、37°C需6min、60°C需22min、80°C无明显反应。每组重复3次。"></textarea>
+      <div class="field-meta"><span class="char-count" id="dc">0/600</span></div>
+    </div>
+
+    <div class="form-row full">
+      <label>实验结果 <span class="req">*</span></label>
+      <textarea id="expResult" maxlength="600" oninput="updateChar(this,'rc')" placeholder="例：37°C时淀粉酶活性最高，6分钟内完全水解淀粉；低温（20°C）和高温（60°C以上）均导致酶活性显著下降，80°C时酶完全失活，无水解现象。"></textarea>
+      <div class="field-meta"><span class="char-count" id="rc">0/600</span></div>
+    </div>
+
+    <!-- Upload -->
+    <div class="form-row full">
+      <label>上传附件 <span class="opt">可选 · 图片 / 文档 / 表格</span></label>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onchange="handleFiles(this.files)">
+        <div class="upload-icon">📎</div>
+        <div class="upload-label">点击或拖拽文件到此处上传<br><strong>图片</strong>（JPG/PNG/GIF）· <strong>文档</strong>（PDF/DOC/DOCX）· <strong>表格</strong>（XLS/XLSX/CSV）</div>
+        <div class="upload-types">最多上传 6 个文件 · 单文件最大 10MB</div>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+  </div>
+
+  <!-- Advanced -->
+  <div class="advanced-toggle" onclick="toggleAdvanced()">
+    <span class="toggle-arrow" id="toggleArrow">▶</span>
+    <span>更多选项（可选）</span>
+  </div>
+  <div class="advanced-fields" id="advancedFields">
+    <div class="form-row">
+      <label>实验材料 <span class="opt">可选</span></label>
+      <textarea id="expMaterials" style="min-height:70px" placeholder="例：淀粉溶液、淀粉酶溶液、碘液、恒温水浴锅、温度计、试管若干..."></textarea>
+    </div>
+    <div class="form-row">
+      <label>实验假设 <span class="opt">可选</span></label>
+      <textarea id="expHypo" style="min-height:70px" placeholder="例：37°C时淀粉酶活性最高，水解速率最快，偏离此温度活性降低。"></textarea>
+    </div>
+    <div class="form-row">
+      <label>报告风格</label>
+      <select id="reportStyle">
+        <option value="standard">标准学术风格</option>
+        <option value="detail">详细深入版</option>
+        <option value="simple">简洁精练版</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>报告用途</label>
+      <select id="reportUse">
+        <option value="class">课堂实验报告</option>
+        <option value="contest">竞赛/科研报告</option>
+        <option value="practice">自主练习</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Actions -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:.75rem">
+  <div class="loading" id="loading">
+    <div class="loading-bar"><div class="loading-bar-fill" id="loadFill"></div></div>
+    <span id="loadText">正在生成报告...</span>
+  </div>
+  <div id="errorToast" class="toast error">请填写带 * 的必填项（实验名称、类型、目的、数据、结果）后再生成。</div>
+  <div class="btn-row" style="margin-left:auto">
+    <button class="btn-secondary" onclick="clearForm()">✕ 清空</button>
+    <button class="btn-primary" id="generateBtn" onclick="generateReport()">⚡ 生成完整报告</button>
+  </div>
+</div>
+<div class="shortcut-hint">按 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速生成</div>
+
+<!-- Output -->
+<div id="output"></div>
+
+<footer>AI 实验报告生成助手 v3 · 模拟演示版本</footer>
+</div>
+
+<script>
+// ── Char counter ─────────────────────────────────────
+function updateChar(el, id) {
+  const e = document.getElementById(id);
+  const l = el.value.length, m = el.maxLength;
+  e.textContent = `${l}/${m}`;
+  e.className = 'char-count' + (l > m * .85 ? ' warn' : '');
+}
+
+// ── Advanced toggle ───────────────────────────────────
+function toggleAdvanced() {
+  document.getElementById('advancedFields').classList.toggle('open');
+  document.getElementById('toggleArrow').classList.toggle('open');
+}
+
+// ── File handling ─────────────────────────────────────
+let uploadedFiles = [];
+
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+
+function handleFiles(files) {
+  const allowed = ['image/jpeg','image/png','image/gif','image/webp','application/pdf',
+    'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv','text/plain'];
+  for (const f of files) {
+    if (uploadedFiles.length >= 6) { showToast('error','最多上传 6 个文件'); break; }
+    if (f.size > 10 * 1024 * 1024) { showToast('error', `${f.name} 超过 10MB 限制`); continue; }
+    if (!allowed.includes(f.type) && !f.name.match(/\.(csv|txt|doc|docx|xls|xlsx|pdf)$/i)) {
+      showToast('error', `不支持的文件类型：${f.name}`); continue;
+    }
+    const exists = uploadedFiles.some(u => u.name === f.name && u.size === f.size);
+    if (exists) continue;
+    uploadedFiles.push(f);
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  if (!uploadedFiles.length) { list.innerHTML = ''; return; }
+  list.innerHTML = uploadedFiles.map((f, i) => {
+    const icon = getFileIcon(f);
+    const size = f.size < 1024 ? f.size + 'B' : f.size < 1024*1024 ? (f.size/1024).toFixed(1)+'KB' : (f.size/1024/1024).toFixed(1)+'MB';
+    const preview = f.type.startsWith('image/')
+      ? `<br><img class="file-preview-img" src="${URL.createObjectURL(f)}" alt="${f.name}">`
+      : '';
+    return `<div class="file-item">
+      <span class="file-icon">${icon}</span>
+      <span class="file-name">${f.name}</span>
+      <span class="file-size">${size}</span>
+      <span class="file-del" onclick="removeFile(${i})">✕</span>
+    </div>${preview}`;
+  }).join('');
+}
+
+function removeFile(i) { uploadedFiles.splice(i, 1); renderFileList(); }
+
+function getFileIcon(f) {
+  if (f.type.startsWith('image/')) return '🖼️';
+  if (f.type === 'application/pdf') return '📄';
+  if (f.name.match(/\.docx?$/i)) return '📝';
+  if (f.name.match(/\.xlsx?$|\.csv$/i)) return '📊';
+  return '📎';
+}
+
+// ── Clear form ────────────────────────────────────────
+function clearForm() {
+  ['expName','expGoal','expData','expResult','expMaterials','expHypo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  [['nc','80'],['gc','400'],['dc','600'],['rc','600']].forEach(([id, max]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = `0/${max}`;
+  });
+  document.getElementById('expType').value = '';
+  uploadedFiles = [];
+  renderFileList();
+  document.getElementById('fileInput').value = '';
+  const out = document.getElementById('output');
+  out.innerHTML = '';
+  out.classList.remove('visible');
+  setStep(1);
+}
+
+// ── Steps ─────────────────────────────────────────────
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const el = document.getElementById('sd'+i);
+    el.classList.remove('active','done');
+    if (i < n) { el.classList.add('done'); el.textContent = '✓'; }
+    else if (i === n) { el.classList.add('active'); el.textContent = i; }
+    else el.textContent = i;
+  });
+}
+
+// ── Toast ─────────────────────────────────────────────
+function showToast(type, msg) {
+  const el = document.getElementById('errorToast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Toggle section collapse ───────────────────────────
+function toggleSection(id) {
+  const body = document.getElementById('body_'+id);
+  const btn = document.getElementById('cbtn_'+id);
+  if (!body || !btn) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? 'block' : 'none';
+  btn.classList.toggle('collapsed', !hidden);
+}
+
+// ── Generate ──────────────────────────────────────────
+function generateReport() {
+  const name    = document.getElementById('expName').value.trim();
+  const type    = document.getElementById('expType').value;
+  const goal    = document.getElementById('expGoal').value.trim();
+  const data    = document.getElementById('expData').value.trim();
+  const result  = document.getElementById('expResult').value.trim();
+  const mats    = document.getElementById('expMaterials').value.trim();
+  const hypo    = document.getElementById('expHypo').value.trim();
+
+  if (!name || !type || !goal || !data || !result) {
+    showToast('error','请填写带 * 的必填项（实验名称、类型、目的、数据、结果）');
+    return;
+ // 👉 开始AI生成
+const apiKey = "AIzaSyAvC2cNf5sf7a56nVgGu2QZf-2AZOnXKOI";  // 替换成你的key
+
+const prompt = `
+你是一名合成生物技术专业的大学生，请根据以下实验信息撰写一份完整实验报告：
+
+【实验名称】${name}
+【实验类型】${type}
+【实验目的】${goal}
+【实验材料】${mats}
+【实验假设】${hypo}
+【实验数据】${data}
+【实验结果】${result}
+
+请完成一份结构完整、内容具体的实验报告，包括但不限于：
+
+- 实验目的
+- 实验原理（结合专业知识展开说明）
+- 实验步骤（详细描述过程，而不是简单列点）
+- 实验结果（结合数据进行描述）
+- 结果分析（重点分析数据变化原因）
+- 实验结论
+
+当前生成时间：${new Date()}
+
+要求：
+1. 必须结合具体数据进行分析，不能泛泛而谈
+2. 每次生成的表达方式需不同，避免重复模板句
+3. 可以适当扩展内容，使报告更完整真实
+4. 语言专业，但避免完全一致的句式结构
+`;
+const loading = document.getElementById('loading');
+loading.style.display = 'flex';
+
+fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    contents: [{
+      parts: [{ text: prompt }]
+    }]
+  })
+})
+.then(res => res.json())
+.then(data => {
+  const text = data.candidates[0].content.parts[0].text;
+
+  // 👉 这里是关键：把AI结果塞回你原来的页面
+  const output = document.getElementById('output');
+  output.innerText = text;
+
+  loading.style.display = 'none';
+})
+.catch(err => {
+  console.error(err);
+  showToast('error', '生成失败，请重试');
+  loading.style.display = 'none';
+});
+ }
+  const btn = document.getElementById('generateBtn');
+  const loading = document.getElementById('loading');
+  const output = document.getElementById('output');
+
+  btn.disabled = true;
+  loading.classList.add('active');
+  output.classList.remove('visible');
+  output.innerHTML = '';
+  setStep(2);
+
+  const msgs = ['正在解析实验数据...','正在推理实验原理...','正在生成步骤与分析...','正在撰写结论与反思...'];
+  let mi = 0;
+  const lt = setInterval(() => { if (mi < msgs.length) document.getElementById('loadText').textContent = msgs[mi++]; }, 430);
+
+  // Snapshot files before async
+  const filesSnap = [...uploadedFiles];
+
+  setTimeout(() => {
+    clearInterval(lt);
+    output.innerHTML = buildReport(name, type, goal, data, result, mats, hypo, filesSnap);
+    loading.classList.remove('active');
+    btn.disabled = false;
+    setStep(3);
+    output.style.display = 'block';
+    requestAnimationFrame(() => requestAnimationFrame(() => output.classList.add('visible')));
+    output.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 1900);
+}
+
+// ── Report builder ────────────────────────────────────
+function tLabel(t) {
+  return {bio:'生物学',chem:'化学',phys:'物理学',env:'环境科学',other:'综合'}[t]||'实验';
+}
+
+function buildReport(name, type, goal, data, result, mats, hypo, files) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const timeStr = now.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  const tl = tLabel(type);
+
+  const sections = [
+    { id:'s0', icon:'📋', num:'00', name:'实验基本信息',      body: buildInfo(name,tl,goal,data,result,mats,hypo,files) },
+    { id:'s1', icon:'🔬', num:'01', name:'实验原理',          body: buildPrinciple(type) },
+    { id:'s2', icon:'⚗️',  num:'02', name:'实验步骤',          body: buildSteps(type,mats) },
+    { id:'s3', icon:'📊', num:'03', name:'实验结果',          body: buildResultSection(result, data, files) },
+    { id:'s4', icon:'🧮', num:'04', name:'实验结果分析',      body: buildAnalysis(data, result, hypo) },
+    { id:'s5', icon:'✅', num:'05', name:'实验结论',          body: buildConclusion(name,goal,result,hypo) },
+    { id:'s6', icon:'⚠️',  num:'06', name:'实验误差分析',      body: buildError(type) },
+    { id:'s7', icon:'🪞', num:'07', name:'实验反思与改进建议', body: buildReflection(name,goal) },
+  ];
+
+  const meta = `
+    <div class="report-meta-bar">
+      <span class="report-label">// 报告生成完毕</span>
+      <div class="report-info">
+        <span>📅 ${dateStr} ${timeStr}</span>
+        <span>🔖 ${tl}实验</span>
+        <span>📄 ${sections.length} 个模块</span>
+        ${files.length ? `<span>📎 ${files.length} 个附件</span>` : ''}
+      </div>
+    </div>`;
+
+  const cards = sections.map(s => `
+    <div class="section">
+      <div class="section-head" onclick="toggleSection('${s.id}')">
+        <span class="section-num">${s.num}</span>
+        <span class="section-icon">${s.icon}</span>
+        <span class="section-name">${s.name}</span>
+        <span class="collapse-btn" id="cbtn_${s.id}">▾</span>
+      </div>
+      <div class="section-body" id="body_${s.id}">${s.body}</div>
+    </div>`).join('');
+
+  const actions = `
+    <div class="output-actions">
+      <button class="btn-secondary" onclick="window.print()">🖨 打印报告</button>
+      <button class="btn-secondary" id="copyBtn" onclick="copyReport()">📋 复制全文</button>
+      <button class="btn-primary" onclick="clearForm()" style="font-size:12px;padding:10px 20px">↩ 重新填写</button>
+    </div>`;
+
+  return meta + cards + actions;
+}
+
+// ── Section content ───────────────────────────────────
+function buildInfo(name,tl,goal,data,result,mats,hypo,files) {
+  let html = `
+    <p><span class="tag tag-g">实验名称</span>${name}</p>
+    <p><span class="tag tag-b">实验类型</span>${tl}实验</p>
+    <p><span class="tag tag-g">实验目的</span>${goal}</p>
+    <p><span class="tag tag-b">实验数据</span>${data}</p>
+    <p><span class="tag tag-g">实验结果</span>${result}</p>`;
+  if (mats) html += `<p><span class="tag tag-o">实验材料</span>${mats}</p>`;
+  if (hypo) html += `<p><span class="tag tag-o">实验假设</span>${hypo}</p>`;
+  if (files.length) {
+    html += `<p style="margin-top:.5rem"><span class="tag tag-b">上传附件</span>共 ${files.length} 个文件</p>
+    <div class="attachment-grid">` +
+    files.map(f => {
+      const icon = f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}" alt="${f.name}">` : `<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:32px">${getFileIcon(f)}</div>`;
+      return `<div class="att-card">${icon}<div class="att-name">${f.name}</div><div class="att-type">${f.type || '未知类型'}</div></div>`;
+    }).join('') + '</div>';
+  }
+  return html;
+}
+
+function buildPrinciple(type) {
+  const p = {
+    bio:`<p>本实验基于<strong>生物酶学与生命活动调控</strong>的基本原理。酶作为生物催化剂，通过降低化学反应的活化能来加速生化反应，其活性受温度、pH、底物浓度等多种环境因素影响。</p>
+<p>在温度方面，酶的活性与温度呈"钟形"曲线关系：在最适温度以下，升温使分子运动加快，酶与底物碰撞频率增加，催化速率提高；超过最适温度后，高温导致酶的空间构象发生不可逆变化（热变性），活性位点结构被破坏，酶活性骤降甚至完全丧失。</p>
+<div class="info-box">📐 核心方程参考：Michaelis-Menten 方程 v = Vmax·[S]/(Km+[S])，温度变化同时影响 Vmax（最大反应速率）和 Km（米氏常数，反映酶对底物的亲和力）。最适温度下 Vmax 最大，Km 最小，催化效率最高。</div>
+<p>本实验通过系统改变单一自变量，对比不同条件下的反应速率或产物生成量，定量分析目标变量对酶促反应的影响规律，从而归纳出变量与结果之间的科学关系。</p>`,
+    chem:`<p>本实验基于<strong>化学反应动力学与热力学</strong>基本原理。化学反应的发生依赖于反应物分子间的有效碰撞，碰撞频率与碰撞能量共同决定反应速率。</p>
+<p>根据<strong>阿伦尼乌斯方程</strong> k = A·exp(−Ea/RT)，反应速率常数 k 与温度 T 呈指数正相关，温度每升高 10°C，反应速率通常增加 2～4 倍。浓度方面，由质量作用定律，反应速率与各反应物浓度的幂次乘积成正比（速率方程）。催化剂通过提供新的反应路径降低活化能 Ea，从而在不改变反应热的条件下加速反应。</p>
+<div class="info-box">⚗️ 关键控制原则：实验中须保证单一变量——即在改变自变量的同时，严格控制其他可能影响反应的因素（温度、浓度、压强、光照等），以确保实验结论的有效性。</div>
+<p>本实验通过测量不同条件下的反应速率、产物浓度变化或反应时间等可测量量，定量研究目标变量对化学反应过程的影响，揭示其背后的动力学规律。</p>`,
+    phys:`<p>本实验基于经典物理学相关原理，运用<strong>控制变量法</strong>对物理量间的定量关系进行系统探究。</p>
+<p>物理实验的核心方法论是：在保证其他量不变的前提下，系统改变一个自变量，精确测量因变量的响应，从而建立两者之间的数学函数关系（如线性、二次、反比等）。实验中需充分考量系统误差（仪器精度、环境干扰）与随机误差（操作波动、读数误差）对结果精度的影响，并采取相应措施加以控制。</p>
+<div class="info-box">📏 精度控制原则：① 选用量程合适、精度足够的仪器；② 多次重复测量取平均值（n≥5）以压缩随机误差；③ 采用作图法分析数据，利用最佳拟合直线减小个别数据点的误差影响；④ 对最终结果进行不确定度估算。</div>`,
+    env:`<p>本实验基于<strong>环境科学与生态学</strong>基本原理，研究环境因素变化对生态系统功能或环境质量指标的影响。</p>
+<p>环境科学实验的特殊性在于其研究对象——自然生态系统——具有高度的复杂性与异质性。实验中既需要在受控条件下明确变量关系，又需要充分考量现实环境的多因素交互作用，确保结论对实际环境问题具有指导意义。数据的采集须保证代表性、随机性和充足的样本量，以满足统计推断的基本要求。</p>
+<div class="info-box">🌍 环境实验特别注意：① 采样点选取需确保空间代表性；② 设置无污染的空白对照，扣除背景值干扰；③ 对照国家/行业环境质量标准对结果进行评价；④ 数据须经统计显著性检验（如 t 检验、ANOVA）。</div>`,
+    other:`<p>本实验依据相关学科的基础理论与研究方法，通过规范的<strong>科学实验设计</strong>对研究问题进行系统探究。</p>
+<p>实验遵循<strong>控制变量原则</strong>，明确区分自变量（主动改变的量）、因变量（被测量的量）与控制变量（保持不变的量），确保实验结论能够归因于目标变量，排除干扰因素。通过定量或定性的数据采集与统计分析，对实验假设进行验证或修正，最终得出科学、可靠的实验结论。</p>
+<div class="info-box">🔍 科学方法论路径：观察现象 → 提出问题 → 建立假设 → 设计实验 → 采集数据 → 分析结论 → 验证推广</div>`
+  };
+  return p[type] || p['other'];
+}
+
+function buildSteps(type, mats) {
+  const matLine = mats
+    ? `<li><strong>器材与试剂准备：</strong>核对并准备所需材料——${mats}。检查仪器完好性与校准状态（分析天平归零、温度计校验、pH 计两点校准等），对需要预热的仪器提前开机稳定。</li>`
+    : `<li><strong>器材与试剂准备：</strong>根据实验方案准备全部所需器材与试剂，逐一核对清单。检查仪器状态，确认量程与精度符合实验要求；需要校准的仪器提前校准，记录校准数据。</li>`;
+
+  const typeSteps = {
+    bio:`<li><strong>实验分组设计：</strong>设置空白对照组（不含自变量处理）、阳性对照组（已知结果的参照）和各实验组，每组平行样本数 n≥3，保证统计可靠性。制作分组记录表，清晰标注各组条件。</li>
+<li><strong>生物材料处理：</strong>在洁净（必要时无菌）条件下处理生物材料。严格控制操作时间，避免酶液失活或样品降解；关键操作在指定温度环境下进行（如冰浴保存酶液），使用前充分混匀。</li>
+<li><strong>变量条件精确设定：</strong>使用恒温水浴锅将各实验组精确加热至目标温度，预热稳定时间≥5 min，实验过程中持续监控温度（波动≤±0.5°C）。对 pH 敏感实验，使用缓冲液维持 pH 稳定。</li>
+<li><strong>反应启动与同步计时：</strong>各组同步加入底物或启动反应，立即开始计时。在预设时间点取样或观察反应终点（如碘液变色），各组操作顺序与时间间隔保持严格一致。</li>
+<li><strong>数据检测与记录：</strong>采用适当检测方法（碘液显色、分光光度计 OD 值、pH 计读数等）定时测定反应进程，将数据即时记录于预制数据表中，不得事后凭记忆补录。</li>`,
+    chem:`<li><strong>试剂配制与标定：</strong>用精密分析天平称量固体试剂（精确至 0.0001 g），使用容量瓶配制标准浓度溶液（精度≤0.1%）。对标准液进行标定（如酸碱中和滴定法），配制后贴标签并记录配制时间。</li>
+<li><strong>实验装置搭建与检漏：</strong>按实验方案搭建反应装置，若涉及气体收集，检查各连接处密封性（向液封中通气观察气泡）；涉及加热实验，检查耐热容器与支架稳定性。</li>
+<li><strong>条件设定与预热：</strong>设置恒温水浴至目标温度，待温度稳定后方可开始实验。需要惰性气氛保护的实验，提前通入 N₂ 排除体系中的空气。</li>
+<li><strong>反应进行与实时监测：</strong>按规定顺序加入试剂（注意加料顺序对安全性的影响），启动反应后实时记录现象：颜色变化、沉淀生成、气体产生、温度变化等。在预设时间点取样分析，每次取样量保持一致。</li>
+<li><strong>数据记录与重复验证：</strong>详细记录每次实验的原始数据，保留所有数据不得删改，标注异常值及其可能原因。每组条件重复实验 3 次，取平均值，并计算标准偏差评估数据离散程度。</li>`,
+    phys:`<li><strong>仪器调试与校准：</strong>对全部测量仪器进行校准归零（电压表、电流表内阻补偿，天平调水平，游标卡尺检查零误差等），记录仪器型号、量程、最小分度值，估算系统误差范围。</li>
+<li><strong>装置搭建与安全检查：</strong>按实验电路图或装置图搭建实验设施，复核连接正确性。高压或大电流实验须经教师检查后通电；光学实验注意避免强光直射眼睛；力学实验检查支架与夹具稳固性。</li>
+<li><strong>预实验与量程选择：</strong>在正式实验前进行 1～2 次预实验，验证装置工作正常，确认测量量的数量级，据此选择合适量程，避免超量程或读数精度不足。</li>
+<li><strong>系统测量：</strong>按计划系统改变自变量（等间距或对数间距），每个自变量值下重复测量 5 次（或以上），记录全部原始数据（不取舍异常值，而是标注说明），计算各组均值与标准差。</li>
+<li><strong>图形化数据处理：</strong>将数据绘制散点图，用最小二乘法作最佳拟合直线（或曲线），由斜率、截距计算目标物理量，并根据数据离散程度估算最终结果的不确定度。</li>`,
+    other:`<li><strong>方案熟悉与分工：</strong>仔细阅读完整实验方案，明确各步骤操作要点、时间节点与注意事项。多人实验时进行合理分工，制作实验记录表，确保能够完整记录所有必要数据。</li>
+<li><strong>对照组设置：</strong>设置合理对照（空白对照、阳性对照或历史参照数据），保证实验结论的相对可比性与说服力。每组平行样本数不少于 3 个。</li>
+<li><strong>实验操作执行：</strong>严格按照方案逐步操作，坚守控制变量原则。对每个自变量取值独立开展实验，避免不同处理组间的交叉污染或相互干扰。</li>
+<li><strong>数据采集与记录：</strong>在规定时间点或满足设定条件时记录数据，即时填写记录表，同步记录实验现象、环境条件（温度、湿度）及任何异常情况。</li>
+<li><strong>阶段质控：</strong>每完成一个实验组，对数据进行初步合理性检验（数量级、趋势是否符合预期），如有明显异常及时查找原因，必要时重做该组实验。</li>`
+  };
+
+  return `<ol>${matLine}
+<li><strong>安全防护确认：</strong>穿戴实验服、护目镜、防护手套（必要时佩戴口罩）。确认紧急冲眼器、灭火器、急救药品的位置，熟悉紧急疏散路线，保持实验台整洁无障碍物。</li>
+${typeSteps[type]||typeSteps['other']}
+<li><strong>实验结束处置：</strong>按废物分类规定处置实验废弃物（废液、固废分别处理，不随意倒入下水道）。清洁实验器材，关闭电源/水源/气源，玻璃器具清洗后正置晾干，仪器归位，填写仪器使用记录。</li>
+</ol>
+<div class="highlight">⚠ 安全提示：实验过程中不擅自修改实验方案；遇突发情况（起火、泄漏、人员受伤）立即停止实验、疏散人员、报告教师并拨打相应急救电话。</div>`;
+}
+
+function buildResultSection(result, data, files) {
+  let html = `
+<p><strong>实验结果描述：</strong>${result}</p>
+<p><strong>原始数据记录：</strong>实验采集到的数据为「${data}」，各组数据已核查完整，无遗漏。</p>
+<table class="data-table">
+  <thead><tr><th>评价项目</th><th>具体情况</th><th>评级</th></tr></thead>
+  <tbody>
+    <tr><td>数据完整性</td><td>所有实验组均有完整记录，平行样本满足统计要求</td><td><span class="tag tag-g">良好</span></td></tr>
+    <tr><td>结果一致性</td><td>平行样本间偏差在可接受范围，重复性良好</td><td><span class="tag tag-g">满足</span></td></tr>
+    <tr><td>趋势显著性</td><td>各组间差异明显超过随机误差范围，趋势清晰</td><td><span class="tag tag-b">显著</span></td></tr>
+    <tr><td>异常值处理</td><td>已识别并标注异常值，分析成因后决定是否纳入统计</td><td><span class="tag tag-o">已处理</span></td></tr>
+  </tbody>
+</table>`;
+
+  if (files.length) {
+    const imgFiles = files.filter(f => f.type.startsWith('image/'));
+    const otherFiles = files.filter(f => !f.type.startsWith('image/'));
+    if (imgFiles.length) {
+      html += `<p style="margin-top:.75rem"><strong>实验图像附件：</strong></p>
+<div class="attachment-grid">` +
+      imgFiles.map(f => `<div class="att-card"><img src="${URL.createObjectURL(f)}" alt="${f.name}"><div class="att-name">${f.name}</div><div class="att-type">实验图像</div></div>`).join('') +
+      `</div>`;
+    }
+    if (otherFiles.length) {
+      html += `<p style="margin-top:.75rem"><strong>数据文档附件：</strong></p>
+<div class="attachment-grid">` +
+      otherFiles.map(f => `<div class="att-card"><div style="height:80px;display:flex;align-items:center;justify-content:center;font-size:28px">${getFileIcon(f)}</div><div class="att-name">${f.name}</div><div class="att-type">${f.name.split('.').pop().toUpperCase()} 文件</div></div>`).join('') +
+      `</div>`;
+    }
+  }
+  return html;
+}
+
+function buildAnalysis(data, result, hypo) {
+  const hypoLine = hypo ? `<p><strong>与假设对比验证：</strong>实验前建立的假设为"${hypo.substring(0,60)}${hypo.length>60?'...':''}"。对比实验结果，分析假设与实测数据的吻合程度，确认哪些预测得到验证、哪些需要修正，为理论模型的完善提供依据。</p>` : '';
+  return `<p><strong>数据规律提取：</strong>基于实验数据「${data}」与实验结果「${result.substring(0,80)}${result.length>80?'...':''}」，可归纳出以下定量规律：随自变量系统性变化，因变量呈现出具有统计意义的趋势性变化，各实验组间差异明显超出随机误差范围，表明自变量对实验结果存在实质性的调控作用，而非偶然波动。</p>
+<p><strong>最优条件分析：</strong>通过横向对比各实验组数据，可确定产生最优实验结果的条件区间。在该最适条件下，实验效果显著优于其他组；偏离最适条件时，效果呈单调下降或非线性衰减趋势。建议后续实验在最优区间内进一步细化自变量取值，以精确定位最优参数点。</p>
+<p><strong>机制层面解释：</strong>从实验原理出发，对观察到的数据规律进行机制层面的解读——变量影响结果的背后存在明确的物理、化学或生物学机制（如酶构象变化、碰撞频率改变、分子运动加速等），这些机制共同决定了实验结果随自变量的变化趋势，与理论预期高度吻合。</p>
+${hypoLine}
+<div class="info-box">📈 可视化建议：将数据绘制折线图（连续变量）或柱状图（离散变量），直观呈现变量间的定量关系。若需判断变量间是否存在显著差异，建议进行 t 检验（两组）或单因素方差分析 ANOVA（多组），以 p ＜ 0.05 作为统计显著性判断标准。</div>
+<p><strong>潜在干扰因素评估：</strong>分析实验过程中可能对结果产生影响的非目标因素，如环境温度波动、操作时间差异、生物材料批次差异等，评估其对结论可靠性的影响程度，并说明已采取的控制措施。</p>`;
+}
+
+function buildConclusion(name, goal, result, hypo) {
+  return `<p><strong>核心结论：</strong>本次实验"<strong>${name}</strong>"成功实现了预定目标。实验数据与结果证明，目标变量对实验体系产生了显著且规律性的影响，变量间的相关关系得到了定量验证，实验结论具有较高的可信度与重复性。</p>
+<p><strong>具体结论陈述：</strong>基于实验结果"${result.substring(0,100)}${result.length>100?'...':''}"，可以得出：在本实验的条件范围内，自变量与因变量之间存在明确的相关关系，且存在使实验效果最优的特定条件区间。该结论与相关理论预期基本一致，验证了理论在本实验条件下的适用性。</p>
+${hypo ? `<p><strong>假设验证：</strong>实验前建立的假设"${hypo.substring(0,60)}${hypo.length>60?'...':''}"${result.length > 20 ? '得到实验数据的有效支持，假设的核心论断被验证。' : '需要结合具体数据进一步评估其成立条件。'}在后续研究中可在此基础上进一步细化假设，探究边界条件与更深层的机制。</p>` : ''}
+<p><strong>规律总结：</strong></p>
+<ul>
+  <li>在本实验条件范围内，自变量与因变量之间存在明确的<strong>规律性相关关系</strong>，变化趋势稳定可重复；</li>
+  <li>存在使实验结果达到最优的<strong>最适条件区间</strong>，超出此区间效果显著下降；</li>
+  <li>平行实验结果一致性良好，数据离散程度在可接受范围内，排除了偶然因素的主要干扰；</li>
+  <li>实验结论与理论模型预期吻合，进一步支持了相关领域的基础理论。</li>
+</ul>
+<div class="highlight">✅ 结论可靠性评估：本次实验设计合理，变量控制到位，数据质量良好，结论在本实验条件下具有较高的科学可信度。推广应用时需结合具体场景审慎分析。</div>
+<p><strong>应用价值展望：</strong>本次实验的结论在实际应用场景中具有一定的参考价值——实验所确定的最优条件参数可为相关领域（如工业生产、医学研究、环境治理等）的工艺优化或方案设计提供定量参考依据。</p>`;
+}
+
+function buildError(type) {
+  const typeErrors = {
+    bio:`<li><strong>生物材料个体差异（系统误差）：</strong>不同批次或个体来源的生物材料（酶液、细胞、组织）在活性或状态上存在固有差异，导致各组实验的基线不一致。控制措施：使用同一批次材料，实验前统一测定活性并以此作为标准化基准。</li>
+<li><strong>生物活性时间衰减（系统误差）：</strong>实验材料（尤其是酶、细胞）在操作过程中随时间发生自然失活，使后期实验组数据系统性偏低。控制措施：缩短实验总时长，非操作期间材料置于冰浴保存，并记录材料处理到使用的时间间隔。</li>`,
+    chem:`<li><strong>试剂纯度引入的系统误差：</strong>化学试剂中的杂质可能参与副反应，影响主反应速率或产物纯度。控制措施：使用分析纯（AR）及以上级别试剂；对关键试剂进行预先纯度检验。</li>
+<li><strong>反应热引起的温度漂移：</strong>放热或吸热反应本身会导致反应体系温度偏离设定值，进而影响反应速率。控制措施：使用较大热容的恒温水浴，并在反应过程中持续监控体系温度。</li>`,
+    phys:`<li><strong>仪器系统误差：</strong>电表内阻、摩擦力、接触电阻、零点漂移等仪器固有特性带来系统偏差，导致测量值与真实值存在固定差距。控制措施：通过校准曲线或修正公式对系统误差进行补偿；选用内阻更小的仪器。</li>
+<li><strong>环境干扰误差：</strong>振动、电磁场、气流、环境温度变化等外部因素对精密测量的干扰。控制措施：在隔振台上操作精密天平；电磁实验远离强磁场干扰源；温度敏感实验在恒温室内进行。</li>`,
+    other:''
+  };
+
+  return `<p>误差分析是评估实验结论可靠性的重要环节。本实验的误差来源可从以下三个层面系统分析：</p>
+<p><strong>（一）系统误差——固有偏差，影响结果准确度</strong></p>
+<ul>
+  <li><strong>仪器精度限制：</strong>测量仪器的最小分辨率（最小分度）决定了数据的精度上限。例如：普通温度计精度±1°C，精密热电偶可达±0.1°C；普通移液管精度±0.1mL，微量进样器可达±0.001mL。实验前应根据精度需求选择合适仪器。</li>
+  <li><strong>方法固有偏差：</strong>实验方法本身可能引入系统偏差，如目视判断反应终点存在主观误差（建议改用仪器检测），间接测量法因假设引入的误差（如用电阻丝替代弹簧测力时忽略了弹性势能存储）。</li>
+  ${typeErrors[type]||''}
+</ul>
+<p><strong>（二）随机误差——统计波动，影响结果精密度</strong></p>
+<ul>
+  <li><strong>操作手法波动：</strong>同一操作者在不同次实验中，手法的轻微差异（取样量、混合力度、计时精度）引入随机误差。控制措施：规范操作手法，每次操作前进行预练；增加重复次数（n≥5）取平均值，降低随机误差对均值的影响。</li>
+  <li><strong>读数随机误差：</strong>对指针式仪表进行视差估读，或对数字仪表末位读数的不确定性，均属随机误差。控制措施：读数时视线垂直刻度面；对数字仪表取最后一位稳定显示的读数。</li>
+  <li><strong>样品不均匀性：</strong>液体样品分层、固体样品粒径不均等导致取样代表性不足。控制措施：充分混匀样品后再取样；增大取样量取其均值。</li>
+</ul>
+<p><strong>（三）过失误差——人为失误，应尽量避免</strong></p>
+<ul>
+  <li>操作失误（如读错刻度、加错试剂、记录笔误）：通过双人复核、实验前充分预习来预防；一旦发现立即标注并重做该数据点，不得将明显过失数据纳入统计。</li>
+</ul>
+<div class="warn-box">⚡ 综合误差控制建议：① 优先使用精密仪器替代人工估读；② 每组重复实验≥3 次，取均值并报告标准差；③ 设置空白对照扣除本底误差；④ 实验前充分练习操作，稳定手法；⑤ 在数据分析时使用统计检验方法区分真实效应与误差波动。</div>
+<p><strong>误差量级估算：</strong>综合各误差来源，本次实验的综合相对误差估计在 5%～15% 范围内。此量级的误差对实验结论的定性判断（趋势方向）影响有限，但对定量结果（绝对数值）的精确性有一定影响，在引用具体数值时需注明误差范围。</p>`;
+}
+
+function buildReflection(name, goal) {
+  return `<p><strong>实验过程回顾：</strong>本次实验"${name}"整体执行顺利，实验设计合理，数据采集过程基本规范，对变量的控制较为到位，实验结果重复性良好，达到了预定的实验目的。</p>
+<p><strong>实验中发现的问题及处置：</strong>在实验过程中，记录了以下值得反思的情况：</p>
+<ul>
+  <li>初始阶段部分数据出现波动，经分析可能源于样品预处理不充分（混匀不够、温度尚未平衡），已通过延长预处理时间加以纠正，后续数据趋于稳定；</li>
+  <li>操作节奏与计时精度有待提升，建议在下次实验前专项练习关键操作步骤；</li>
+  <li>数据记录应强化即时性，避免凭记忆补录导致的数据失真；</li>
+  <li>实验设计中对照组的种类可以进一步丰富，以增强结论的说服力。</li>
+</ul>
+<p><strong>实验设计改进方案：</strong></p>
+<ul>
+  <li><strong>扩大变量范围与精度：</strong>在当前自变量范围基础上，向两端适当延伸（探索极端条件），同时在最优区间内加密取值点，以更精准地刻画变量-结果关系曲线的完整形态。</li>
+  <li><strong>升级检测方法：</strong>将目视观察或定性判断升级为定量仪器检测（如分光光度计、电化学传感器），消除主观误差，提升数据精度与客观性。</li>
+  <li><strong>引入多因素设计：</strong>在验证单一变量效应的基础上，设计双因素或多因素正交实验，探究变量间的交互效应，使结论更全面反映真实情况的复杂性。</li>
+  <li><strong>增加样本量与统计检验：</strong>将每组重复次数提升至 n≥5，并引入适当的统计检验方法（t 检验 / ANOVA）定量评估组间差异的显著性，使结论具备统计学支撑。</li>
+  <li><strong>完善记录体系：</strong>制作标准化实验记录表（含时间戳、操作者签名、环境参数记录栏），提高数据的溯源性与可审计性。</li>
+</ul>
+<div class="info-box">💡 延伸思考：本次实验结论在实际场景中有何指导意义？例如：酶活性-温度关系研究可指导工业酶制剂的最适储运温度、发酵工艺的温控策略，以及临床热疗或低温保存方案的设计；化学反应动力学研究可指导工业反应器设计与操作参数优化。</div>
+<p><strong>学习收获与能力提升：</strong>通过本次实验，深化了对"${goal.substring(0,40)}${goal.length>40?'...':''}"的理论理解，将抽象知识转化为可操作的实验能力，提升了定量数据的分析与解读能力，也培养了对实验误差与不确定性的批判性思维。实验中"发现问题—分析原因—改进方案"的解决问题路径，对于未来的科研工作具有重要的方法论意义。</p>
+<p><strong>后续研究展望：</strong>基于本次结论，建议开展以下进一步研究：① 在更接近实际应用的复杂体系中验证结论的普适性；② 探究多因素同时变化时的交互效应与协同或拮抗关系；③ 利用本次确定的最优参数，开展规模化验证实验或应用性研究。</p>`;
+}
+
+// ── Copy report ────────────────────────────────────────
+function copyReport() {
+  // Collect text from all section bodies
+  const sections = document.querySelectorAll('.section');
+  let text = '【实验报告】\n\n';
+  sections.forEach(sec => {
+    const title = sec.querySelector('.section-name');
+    const body = sec.querySelector('.section-body');
+    if (title && body) {
+      text += `═══ ${title.textContent} ═══\n`;
+      text += (body.innerText || body.textContent).trim().replace(/\n{3,}/g,'\n\n') + '\n\n';
+    }
+  });
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyBtn');
+      if (btn) { const o = btn.textContent; btn.textContent = '✓ 已复制到剪贴板'; setTimeout(() => btn.textContent = o, 2500); }
+    }).catch(() => fallbackCopy(text));
+  } else { fallbackCopy(text); }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    const btn = document.getElementById('copyBtn');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓ 已复制'; setTimeout(() => btn.textContent = o, 2500); }
+  } catch(e) { alert('复制失败，请手动选中报告内容后按 Ctrl+C 复制。'); }
+  document.body.removeChild(ta);
+}
+
+// ── Keyboard shortcut ─────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generateReport();
+});
+</script>
+</body>
+</html>
